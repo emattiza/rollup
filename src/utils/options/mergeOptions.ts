@@ -122,6 +122,7 @@ function mergeInputOptions(
 		maxParallelFileReads: getOption('maxParallelFileReads'),
 		moduleContext: getOption('moduleContext'),
 		onwarn: getOnWarn(config, defaultOnWarnHandler),
+		trace: getOption('trace'),
 		perf: getOption('perf'),
 		plugins: ensureArray(config.plugins) as Plugin[],
 		preserveEntrySignatures: getOption('preserveEntrySignatures'),

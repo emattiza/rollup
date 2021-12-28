@@ -1,5 +1,8 @@
 import { InputOptions, Plugin, SerializedTimings } from '../rollup/types';
+import { version } from 'package.json';
+import { Span, trace, Tracer } from '@opentelemetry/api';
 
+let tracer: Tracer;
 type StartTime = [number, number];
 
 interface Timer {
@@ -14,11 +17,16 @@ interface Timers {
 	[label: string]: Timer;
 }
 
+interface Spans {
+	[spans: string]: Span
+}
+
 const NOOP = (): void => {};
 let getStartTime = (): StartTime => [0, 0];
 let getElapsedTime: (previous: StartTime) => number = () => 0;
 let getMemory: () => number = () => 0;
 let timers: Timers = {};
+let spans: Spans = {};
 
 const normalizeHrTime = (time: [number, number]) => time[0] * 1e3 + time[1] / 1e6;
 
@@ -133,4 +141,42 @@ export function initialiseTimers(inputOptions: InputOptions): void {
 		timeStart = NOOP;
 		timeEnd = NOOP;
 	}
+	// trace input option overrides performance option impl
+	if (inputOptions.trace) {
+		spans = {};
+		tracer = trace.getTracer("rollup", version)
+		setTimeHelpers();
+		timeStart = timeStartTraceImpl;
+		timeEnd = timeEndTraceImpl;
+		inputOptions.plugins = inputOptions.plugins!.map(getPluginWithSpan)
+	}
+}
+
+function timeStartTraceImpl(label: string, _level?: number): void {
+	if (!spans.hasOwnProperty(label)) {
+		const new_span = tracer.startSpan(label)
+		new_span.setAttributes({
+			memory: 0,
+			startMemory: undefined as never,
+			endMemory: undefined as never,
+			totalMemory: 0
+		})
+		spans[label] = new_span	
+		const currentMemory = getMemory();
+		spans[label].setAttribute("startMemory", currentMemory);
+	}
+}
+
+function timeEndTraceImpl(label: string, _level?: number): void {
+	if (timers.hasOwnProperty(label)) {
+		const labeledSpan = spans[label];
+		const currentMemory = getMemory();
+		labeledSpan.setAttribute("totalMemory", Math.max(timers[label].totalMemory, currentMemory));
+		labeledSpan.setAttribute("endMemory", currentMemory);
+		labeledSpan.end()
+	}
+}
+
+function getPluginWithSpan(plugin: any, _index: number): Plugin {
+	return plugin
 }

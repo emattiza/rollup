@@ -539,6 +539,7 @@ export interface InputOptions {
 	moduleContext?: ((id: string) => string | null | undefined) | { [id: string]: string };
 	onwarn?: WarningHandlerWithDefault;
 	perf?: boolean;
+	trace?: boolean;
 	plugins?: (Plugin | null | false | undefined)[];
 	preserveEntrySignatures?: PreserveEntrySignaturesOption;
 	/** @deprecated Use the "preserveModules" output option instead. */
