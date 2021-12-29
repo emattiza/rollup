@@ -1,9 +1,31 @@
 import { InputOptions, Plugin, SerializedTimings } from '../rollup/types';
 import { version } from 'package.json';
-import { Span, trace, TracerProvider } from '@opentelemetry/api';
+import { Span, trace} from '@opentelemetry/api';
+import { ConsoleSpanExporter, BasicTracerProvider, SimpleSpanProcessor, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { Resource } from '@opentelemetry/resources';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
 
-let provider: TracerProvider = trace.getTracerProvider();
-let tracer = provider.getTracer("rollup", version);
+
+const console_exporter = new ConsoleSpanExporter();
+const otlp_exporter = new OTLPTraceExporter();
+const provider = new BasicTracerProvider({
+	resource: new Resource({
+		[SemanticResourceAttributes.SERVICE_NAME]: 'rollup',
+	}),
+	});
+provider.addSpanProcessor(new SimpleSpanProcessor(console_exporter))
+provider.addSpanProcessor(new BatchSpanProcessor(otlp_exporter))
+provider.register()
+let tracer = trace.getTracer('rollup', version)
+
+export async function shutdownTraceProvider() {
+	await provider.forceFlush()
+	await console_exporter.shutdown()
+	await otlp_exporter.shutdown()
+	await provider.shutdown()
+}
+
 
 type StartTime = [number, number];
 
@@ -150,6 +172,7 @@ export function initialiseTimers(inputOptions: InputOptions): void {
 		timeStart = timeStartTraceImpl;
 		timeEnd = timeEndTraceImpl;
 		inputOptions.plugins = inputOptions.plugins!.map(getPluginWithSpan)
+		console.log('tracing started!')
 	}
 }
 
@@ -169,10 +192,9 @@ function timeStartTraceImpl(label: string, _level?: number): void {
 }
 
 function timeEndTraceImpl(label: string, _level?: number): void {
-	if (timers.hasOwnProperty(label)) {
+	if (spans.hasOwnProperty(label)) {
 		const labeledSpan = spans[label];
 		const currentMemory = getMemory();
-		labeledSpan.setAttribute("totalMemory", Math.max(timers[label].totalMemory, currentMemory));
 		labeledSpan.setAttribute("endMemory", currentMemory);
 		labeledSpan.end()
 	}

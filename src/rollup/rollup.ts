@@ -11,7 +11,7 @@ import { GenericConfigObject } from '../utils/options/options';
 import { basename, dirname, resolve } from '../utils/path';
 import { ANONYMOUS_OUTPUT_PLUGIN_PREFIX, ANONYMOUS_PLUGIN_PREFIX } from '../utils/pluginUtils';
 import { SOURCEMAPPING_URL } from '../utils/sourceMappingURL';
-import { getTimings, initialiseTimers, timeEnd, timeStart } from '../utils/timers';
+import { getTimings, initialiseTimers, shutdownTraceProvider, timeEnd, timeStart } from '../utils/timers';
 import {
 	NormalizedInputOptions,
 	NormalizedOutputOptions,
@@ -100,6 +100,7 @@ export async function rollupInternal(
 		}
 	};
 	if (inputOptions.perf) result.getTimings = getTimings;
+	if (inputOptions.trace) {await shutdownTraceProvider();}
 	return result;
 }
 
