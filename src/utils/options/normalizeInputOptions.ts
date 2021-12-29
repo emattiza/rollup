@@ -53,6 +53,7 @@ export function normalizeInputOptions(config: InputOptions): {
 		moduleContext: getModuleContext(config, context),
 		onwarn,
 		perf: config.perf || false,
+		trace: config.trace || false,
 		plugins: ensureArray(config.plugins),
 		preserveEntrySignatures: getPreserveEntrySignatures(config, unsetOptions),
 		preserveModules: getPreserveModules(config, onwarn, strictDeprecations),

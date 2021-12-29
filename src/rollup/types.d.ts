@@ -568,6 +568,7 @@ export interface NormalizedInputOptions {
 	moduleContext: (id: string) => string;
 	onwarn: WarningHandler;
 	perf: boolean;
+	trace: boolean;
 	plugins: Plugin[];
 	preserveEntrySignatures: PreserveEntrySignaturesOption;
 	/** @deprecated Use the "preserveModules" output option instead. */

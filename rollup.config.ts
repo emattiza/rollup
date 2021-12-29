@@ -7,13 +7,11 @@ import resolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import { RollupOptions, WarningHandlerWithDefault } from 'rollup';
 import { string } from 'rollup-plugin-string';
-import { terser } from 'rollup-plugin-terser';
 import addCliEntry from './build-plugins/add-cli-entry';
 import conditionalFsEventsImport from './build-plugins/conditional-fsevents-import';
 import emitModulePackageFile from './build-plugins/emit-module-package-file';
 import esmDynamicImport from './build-plugins/esm-dynamic-import';
 import getLicenseHandler from './build-plugins/generate-license-file';
-import replaceBrowserModules from './build-plugins/replace-browser-modules';
 import pkg from './package.json';
 
 const commitHash = (function () {
@@ -75,12 +73,13 @@ const nodePlugins = [
 ];
 
 export default (command: Record<string, unknown>): RollupOptions | RollupOptions[] => {
-	const { collectLicenses, writeLicense } = getLicenseHandler();
+	const { collectLicenses } = getLicenseHandler();
 	const commonJSBuild: RollupOptions = {
 		// fsevents is a dependency of chokidar that cannot be bundled as it contains binary code
 		external: [
 			'buffer',
 			'@rollup/plugin-typescript',
+			'@opentelemetry/api',
 			'assert',
 			'crypto',
 			'events',
@@ -146,27 +145,6 @@ export default (command: Record<string, unknown>): RollupOptions | RollupOptions
 		plugins: [...nodePlugins, emitModulePackageFile(), collectLicenses()]
 	};
 
-	const browserBuilds: RollupOptions = {
-		input: 'src/browser-entry.ts',
-		onwarn,
-		output: [
-			{ banner, file: 'dist/rollup.browser.js', format: 'umd', name: 'rollup', sourcemap: true },
-			{ banner, file: 'dist/es/rollup.browser.js', format: 'es' }
-		],
-		plugins: [
-			replaceBrowserModules(),
-			alias(moduleAliases),
-			resolve({ browser: true }),
-			json(),
-			commonjs(),
-			typescript(),
-			terser({ module: true, output: { comments: 'some' } }),
-			collectLicenses(),
-			writeLicense()
-		],
-		strictDeprecations: true,
-		treeshake
-	};
 
-	return [commonJSBuild, esmBuild, browserBuilds];
+	return [commonJSBuild, esmBuild];
 };

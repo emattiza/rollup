@@ -1,8 +1,10 @@
 import { InputOptions, Plugin, SerializedTimings } from '../rollup/types';
 import { version } from 'package.json';
-import { Span, trace, Tracer } from '@opentelemetry/api';
+import { Span, trace, TracerProvider } from '@opentelemetry/api';
 
-let tracer: Tracer;
+let provider: TracerProvider = trace.getTracerProvider();
+let tracer = provider.getTracer("rollup", version);
+
 type StartTime = [number, number];
 
 interface Timer {
@@ -144,7 +146,6 @@ export function initialiseTimers(inputOptions: InputOptions): void {
 	// trace input option overrides performance option impl
 	if (inputOptions.trace) {
 		spans = {};
-		tracer = trace.getTracer("rollup", version)
 		setTimeHelpers();
 		timeStart = timeStartTraceImpl;
 		timeEnd = timeEndTraceImpl;
