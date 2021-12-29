@@ -1,6 +1,6 @@
 import { InputOptions, Plugin, SerializedTimings } from '../rollup/types';
 import { version } from 'package.json';
-import { Span, trace} from '@opentelemetry/api';
+import { context, Context, Span, trace} from '@opentelemetry/api';
 import { ConsoleSpanExporter, BasicTracerProvider, SimpleSpanProcessor, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 import { Resource } from '@opentelemetry/resources';
@@ -114,7 +114,7 @@ export function getTimings(): SerializedTimings {
 	return newTimings;
 }
 
-export let timeStart: (label: string, level?: number) => void = NOOP,
+export let timeStart: (label: string, level?: number, ctx?: Context) => void = NOOP,
 	timeEnd: (label: string, level?: number) => void = NOOP;
 
 const TIMED_PLUGIN_HOOKS: { [hook: string]: boolean } = {
@@ -172,13 +172,12 @@ export function initialiseTimers(inputOptions: InputOptions): void {
 		timeStart = timeStartTraceImpl;
 		timeEnd = timeEndTraceImpl;
 		inputOptions.plugins = inputOptions.plugins!.map(getPluginWithSpan)
-		console.log('tracing started!')
 	}
 }
 
-function timeStartTraceImpl(label: string, _level?: number): void {
+function timeStartTraceImpl(label: string, _level?: number, ctx?: Context): Context {
 	if (!spans.hasOwnProperty(label)) {
-		const new_span = tracer.startSpan(label)
+		const new_span = tracer.startSpan(label, undefined, ctx)
 		new_span.setAttributes({
 			memory: 0,
 			startMemory: undefined as never,
@@ -188,7 +187,12 @@ function timeStartTraceImpl(label: string, _level?: number): void {
 		spans[label] = new_span	
 		const currentMemory = getMemory();
 		spans[label].setAttribute("startMemory", currentMemory);
+		if (ctx === undefined) {
+			return context.active()
+		}
+		return trace.setSpan(ctx, new_span)
 	}
+	return context.active()
 }
 
 function timeEndTraceImpl(label: string, _level?: number): void {
@@ -200,6 +204,31 @@ function timeEndTraceImpl(label: string, _level?: number): void {
 	}
 }
 
-function getPluginWithSpan(plugin: any, _index: number): Plugin {
-	return plugin
+function getPluginWithSpan(plugin: any, index: number): Plugin {
+	const tracedPlugin: { [hook: string]: any } = {};
+	for (const hook of Object.keys(plugin)) {
+		if (TIMED_PLUGIN_HOOKS[hook] === true) {
+			let timerLabel = `plugin ${index}`;
+			if (plugin.name) {
+				timerLabel += ` (${plugin.name})`;
+			}
+			timerLabel += ` - ${hook}`;
+			tracedPlugin[hook] = function (...args: unknown[]) {
+				timeStart(timerLabel, 4);
+				let result = plugin[hook].apply(this === tracedPlugin ? plugin : this, args);
+				timeEnd(timerLabel, 4);
+				if (result && typeof result.then === 'function') {
+					timeStart(`${timerLabel} (async)`, 4);
+					result = result.then((hookResult: unknown) => {
+						timeEnd(`${timerLabel} (async)`, 4);
+						return hookResult;
+					});
+				}
+				return result;
+			};
+		} else {
+			tracedPlugin[hook] = plugin[hook];
+		}
+	}
+	return tracedPlugin as Plugin;
 }
